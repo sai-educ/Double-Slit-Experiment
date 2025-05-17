@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Double Slit Experiment Simulation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Double Slit Experiment</h1>
+        
+        <div class="experiment-container">
+            <div class="emitter-container">
+                <div id="emitter"></div>
+            </div>
+            
+            <div class="barrier-container">
+                <div class="barrier">
+                    <div class="slit slit-top"></div>
+                    <div class="slit slit-bottom"></div>
+                </div>
+            </div>
+            
+            <div class="screen-container">
+                <canvas id="detection-screen"></canvas>
+                <div id="intensity-graph"></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="particle-rate">Emission Rate:</label>
+                <input type="range" id="particle-rate" min="1" max="100" value="20">
+            </div>
+            
+            <div class="control-group">
+                <label for="slit-width">Slit Width:</label>
+                <input type="range" id="slit-width" min="5" max="50" value="20">
+            </div>
+            
+            <div class="control-group">
+                <label for="slit-distance">Slit Separation:</label>
+                <input type="range" id="slit-distance" min="30" max="120" value="70">
+            </div>
+            
+            <div class="control-group">
+                <label for="particle-type">Particle Type:</label>
+                <select id="particle-type">
+                    <option value="electron">Electrons</option>
+                    <option value="photon">Photons</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="detection-mode">Detection Mode:</label>
+                <select id="detection-mode">
+                    <option value="accumulation">Accumulation</option>
+                    <option value="wave">Wave Pattern</option>
+                    <option value="particle">Particle Detection</option>
+                </select>
+            </div>
+            
+            <div class="control-group view-controls">
+                <button id="reset-btn">Reset Simulation</button>
+                <button id="one-by-one-btn">Fire One-by-One</button>
+                <label class="switch">
+                    <input type="checkbox" id="show-paths">
+                    <span class="slider round"></span>
+                    <span class="switch-label">Show Paths</span>
+                </label>
+            </div>
+            
+            <div class="control-group slits-control">
+                <label>Slits:</label>
+                <div class="slit-switches">
+                    <label class="switch">
+                        <input type="checkbox" id="slit1" checked>
+                        <span class="slider round"></span>
+                        <span class="switch-label">Slit 1</span>
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="slit2" checked>
+                        <span class="slider round"></span>
+                        <span class="switch-label">Slit 2</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <h2>About the Double Slit Experiment</h2>
+            <p>The double slit experiment demonstrates the wave-particle duality of quantum mechanics. When particles like electrons pass through two slits, they create an interference pattern as if they were waves, even when fired one at a time.</p>
+            <p>This suggests that each particle somehow explores both paths simultaneously, interfering with itself. As Richard Feynman noted, this experiment encapsulates the fundamental strangeness of quantum mechanics.</p>
+            <div class="stats">
+                <div>Particles fired: <span id="particles-fired">0</span></div>
+                <div>Simulation time: <span id="sim-time">0.0</span>s</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
