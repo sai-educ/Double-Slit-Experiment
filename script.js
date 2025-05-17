@@ -97,7 +97,7 @@ function createParticles() {
     const emissionProbability = emissionRate / 100;
     
     if (Math.random() < emissionProbability) {
-        const y = canvas.height / 2;
+        const y = canvas.height / 2 + (Math.random() - 0.5) * 5; // Tiny variation in starting position
         
         let particle = {
             x: EMITTER_X,
@@ -146,26 +146,22 @@ function updateParticles() {
             if (slitTopOpen && Math.abs(p.y - slitTopY) <= slitWidth / 2) {
                 passesThroughSlit = true;
                 
-                // Add some random deflection at slit
-                p.vy += (Math.random() - 0.5) * 1.0;
+                // Add very small random deflection at slit - will be dominated by interference
+                p.vy += (Math.random() - 0.5) * 0.2;
                 
-                // In wave mode, we adjust trajectory based on interference
-                if (detectionMode === 'wave') {
-                    calculateWaveInterference(p, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen);
-                }
+                // Calculate quantum interference as principal effect
+                calculateInterference(p, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen);
             }
             
             // Check if particle passes through bottom slit
             else if (slitBottomOpen && Math.abs(p.y - slitBottomY) <= slitWidth / 2) {
                 passesThroughSlit = true;
                 
-                // Add some random deflection at slit
-                p.vy += (Math.random() - 0.5) * 1.0;
+                // Add very small random deflection at slit - will be dominated by interference
+                p.vy += (Math.random() - 0.5) * 0.2;
                 
-                // In wave mode, we adjust trajectory based on interference
-                if (detectionMode === 'wave') {
-                    calculateWaveInterference(p, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen);
-                }
+                // Calculate quantum interference as principal effect
+                calculateInterference(p, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen);
             }
             
             // If particle doesn't pass through any slit, remove it
@@ -191,7 +187,7 @@ function updateParticles() {
                     opacity: 1.0
                 });
                 
-                // Update intensity data
+                // Update intensity data - ensure it's within bounds
                 const yIndex = Math.floor(p.y);
                 if (yIndex >= 0 && yIndex < intensityData.length) {
                     intensityData[yIndex] += 1;
@@ -239,23 +235,37 @@ function updateParticles() {
     }
 }
 
-function calculateWaveInterference(particle, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen) {
+function calculateInterference(particle, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen) {
     // Only calculate interference if both slits are open
     if (slitTopOpen && slitBottomOpen) {
-        // Calculate the angle from horizontal for each slit
-        const slitTopAngle = Math.atan2(particle.y - slitTopY, canvas.width - BARRIER_X);
-        const slitBottomAngle = Math.atan2(particle.y - slitBottomY, canvas.width - BARRIER_X);
+        // Get the distance from the particle to the screen
+        const distToScreen = canvas.width - particle.x;
         
-        // Calculate path difference (in pixels)
-        const pathDifference = Math.abs(slitTopY - slitBottomY) * Math.sin(slitTopAngle);
-        
-        // Calculate phase difference based on path difference and wavelength
-        const phaseDifference = (pathDifference / WAVELENGTH) * Math.PI * 2;
-        
-        // Apply interference effect to particle velocity
-        // Make particles more likely to move toward constructive interference regions
-        const interferenceEffect = Math.cos(phaseDifference + particle.phaseOffset);
-        particle.vy += interferenceEffect * 0.5;
+        // Calculate path lengths from each slit to potential points on the screen
+        for (let screenY = 0; screenY < canvas.height; screenY += 5) {
+            // Calculate the distances from each slit to this point on the screen
+            const distFromTopSlit = Math.sqrt(distToScreen**2 + (screenY - slitTopY)**2);
+            const distFromBottomSlit = Math.sqrt(distToScreen**2 + (screenY - slitBottomY)**2);
+            
+            // Calculate the path difference
+            const pathDifference = Math.abs(distFromTopSlit - distFromBottomSlit);
+            
+            // Calculate the phase difference
+            const phaseDifference = (pathDifference / WAVELENGTH) * Math.PI * 2;
+            
+            // Calculate the probability amplitude for this position using quantum interference
+            const probability = Math.cos(phaseDifference / 2) ** 2;
+            
+            // If particle is close to this screenY, adjust its velocity based on probability
+            if (Math.abs(particle.y + particle.vy * distToScreen/particle.vx - screenY) < 10) {
+                // Direction toward this point
+                const direction = (screenY - particle.y) > 0 ? 1 : -1;
+                
+                // Adjust vy based on probability (more probable positions create stronger pull)
+                // This creates natural movement toward interference maxima, away from minima
+                particle.vy += direction * probability * 0.02;
+            }
+        }
     }
 }
 
@@ -271,51 +281,93 @@ function visualizeWavePattern() {
     const slitTopOpen = document.getElementById('slit1').checked;
     const slitBottomOpen = document.getElementById('slit2').checked;
     
-    // Create grid of points for visualization
-    const gridStepX = 10;
-    const gridStepY = 10;
+    // Show interference pattern on screen
+    const screenX = canvas.width - 5; // Just before the right edge
     
-    for (let x = BARRIER_X + 20; x < canvas.width; x += gridStepX) {
-        for (let y = 0; y < canvas.height; y += gridStepY) {
-            // Calculate wave amplitude at this point from both slits
-            let amplitude = 0;
-            
-            if (slitTopOpen) {
-                const distFromTopSlit = Math.sqrt((x - BARRIER_X) ** 2 + (y - slitTopY) ** 2);
-                const phaseTopSlit = (distFromTopSlit / WAVELENGTH) * Math.PI * 2;
-                amplitude += Math.cos(phaseTopSlit - simulationTime * 10);
-            }
-            
-            if (slitBottomOpen) {
-                const distFromBottomSlit = Math.sqrt((x - BARRIER_X) ** 2 + (y - slitBottomY) ** 2);
-                const phaseBottomSlit = (distFromBottomSlit / WAVELENGTH) * Math.PI * 2;
-                amplitude += Math.cos(phaseBottomSlit - simulationTime * 10);
-            }
-            
-            // Normalize amplitude
-            if (slitTopOpen && slitBottomOpen) {
-                amplitude /= 2;
-            }
-            
-            // Map amplitude to color intensity
-            const intensity = (amplitude + 1) / 2; // Map from [-1,1] to [0,1]
-            
-            // Draw dot with color based on intensity
-            const particleType = document.getElementById('particle-type').value;
-            const baseColor = particleType === 'electron' ? [76, 175, 80] : [0, 191, 255]; // RGB for electron or photon
-            
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    
+    // Draw the actual interference pattern on screen
+    for (let y = 0; y < canvas.height; y++) {
+        // Calculate wave contributions from each slit
+        let amplitude = 0;
+        
+        if (slitTopOpen) {
+            const distFromTopSlit = Math.sqrt((screenX - BARRIER_X)**2 + (y - slitTopY)**2);
+            const phaseTopSlit = (distFromTopSlit / WAVELENGTH) * Math.PI * 2;
+            amplitude += Math.cos(phaseTopSlit - simulationTime * 5);
+        }
+        
+        if (slitBottomOpen) {
+            const distFromBottomSlit = Math.sqrt((screenX - BARRIER_X)**2 + (y - slitBottomY)**2);
+            const phaseBottomSlit = (distFromBottomSlit / WAVELENGTH) * Math.PI * 2;
+            amplitude += Math.cos(phaseBottomSlit - simulationTime * 5);
+        }
+        
+        // Normalize amplitude
+        if (slitTopOpen && slitBottomOpen) {
+            amplitude /= 2;
+        }
+        
+        // Calculate intensity (probability)
+        const intensity = Math.pow(amplitude, 2); // Square of amplitude for probability
+        
+        // Map intensity to brightness (0 to 1)
+        const brightness = (intensity + 1) / 2;
+        
+        // Draw line at this y position with appropriate brightness
+        const particleType = document.getElementById('particle-type').value;
+        const baseColor = particleType === 'electron' ? [76, 175, 80] : [0, 191, 255]; // RGB for electron or photon
+        
+        ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${brightness * 0.5})`;
+        ctx.fillRect(screenX - 10, y, 10, 1);
+    }
+    
+    // Draw visualized wavefronts if both slits are open
+    if (slitTopOpen && slitBottomOpen) {
+        const phaseOffset = simulationTime * 10 % (Math.PI * 2);
+        
+        for (let radius = 10; radius < canvas.width; radius += WAVELENGTH) {
+            // Draw wavefront from top slit
             ctx.beginPath();
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]}, ${intensity * 0.3})`;
-            ctx.fill();
+            ctx.arc(BARRIER_X, slitTopY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 - radius/canvas.width * 0.2})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+            
+            // Draw wavefront from bottom slit
+            ctx.beginPath();
+            ctx.arc(BARRIER_X, slitBottomY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 - radius/canvas.width * 0.2})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
         }
     }
+    
+    ctx.restore();
 }
 
 function drawDetectionScreen() {
+    // Draw actual screen background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(canvas.width - 10, 0, 10, canvas.height);
+    
+    // Create interference pattern visualization on the screen
+    const slitTopOpen = document.getElementById('slit1').checked;
+    const slitBottomOpen = document.getElementById('slit2').checked;
+    
+    if (slitTopOpen && slitBottomOpen) {
+        // If both slits are open, draw proper interference pattern
+        drawInterferencePattern();
+    } else if (slitTopOpen || slitBottomOpen) {
+        // If only one slit is open, draw single-slit diffraction pattern
+        drawSingleSlitPattern(slitTopOpen ? getSlitTopY() : getSlitBottomY());
+    }
+    
     // Draw accumulated detections
     const detectionMode = document.getElementById('detection-mode').value;
     
+    // Draw bright spots for each detection
     for (let i = detections.length - 1; i >= 0; i--) {
         const d = detections[i];
         
@@ -329,11 +381,108 @@ function drawDetectionScreen() {
             }
         }
         
+        // Draw detection point on screen
         ctx.beginPath();
-        ctx.arc(d.x, d.y, 2, 0, Math.PI * 2);
+        ctx.arc(d.x, d.y, 1.5, 0, Math.PI * 2);
         ctx.fillStyle = `${d.color}${Math.floor(d.opacity * 255).toString(16).padStart(2, '0')}`;
         ctx.fill();
     }
+}
+
+function drawInterferencePattern() {
+    // Draw the classic double-slit interference pattern on the screen
+    const slitTopY = getSlitTopY();
+    const slitBottomY = getSlitBottomY();
+    const slitDistance = slitBottomY - slitTopY;
+    const slitWidth = parseInt(document.getElementById('slit-width').value);
+    
+    // Calculate parameters for interference pattern
+    const screenDistance = canvas.width - BARRIER_X; // Distance from barrier to screen
+    const screenX = canvas.width - 5; // Position to draw screen pattern
+    
+    // Set up pattern drawing
+    ctx.save();
+    
+    // Create a vertical gradient showing the interference pattern
+    for (let y = 0; y < canvas.height; y++) {
+        // Calculate the angle from the midpoint between slits to this position on screen
+        const theta = Math.atan2(y - (slitTopY + slitBottomY)/2, screenDistance);
+        
+        // For double-slit pattern: intensity = cos²(π·d·sin(θ)/λ) · sinc²(π·w·sin(θ)/λ)
+        // where d is slit separation, w is slit width, λ is wavelength
+        
+        // Calculate path difference
+        const pathDifference = slitDistance * Math.sin(theta);
+        // Phase difference (in radians)
+        const phaseDifference = (pathDifference / WAVELENGTH) * Math.PI;
+        
+        // Double-slit interference factor
+        const interferencePattern = Math.cos(phaseDifference) ** 2;
+        
+        // Single-slit diffraction factor (sinc function)
+        const diffraction = slitWidth > 0 ? 
+            Math.sin(Math.PI * slitWidth * Math.sin(theta) / WAVELENGTH) / 
+            (Math.PI * slitWidth * Math.sin(theta) / WAVELENGTH) : 1;
+        const diffractionPattern = diffraction ** 2;
+        
+        // Combined intensity (normalized to 0-1 range)
+        let intensity = interferencePattern * diffractionPattern;
+        
+        // Apply some contrast enhancement to make pattern more visible
+        intensity = Math.pow(intensity, 0.7);
+        
+        // Draw a pixel of the pattern
+        const particleType = document.getElementById('particle-type').value;
+        const color = particleType === 'electron' ? '#4CAF50' : '#00BFFF';
+        
+        // Convert to white for high intensities for more realistic look
+        const r = Math.min(255, 255 * intensity);
+        const g = Math.min(255, 255 * intensity);
+        const b = Math.min(255, 255 * intensity);
+        
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.fillRect(screenX, y, 5, 1);
+    }
+    
+    ctx.restore();
+}
+
+function drawSingleSlitPattern(slitY) {
+    // Draw a single-slit diffraction pattern
+    const slitWidth = parseInt(document.getElementById('slit-width').value);
+    const screenDistance = canvas.width - BARRIER_X;
+    const screenX = canvas.width - 5;
+    
+    ctx.save();
+    
+    for (let y = 0; y < canvas.height; y++) {
+        // Calculate the angle from the slit to this position on screen
+        const theta = Math.atan2(y - slitY, screenDistance);
+        
+        // Single-slit diffraction: intensity = sinc²(π·w·sin(θ)/λ)
+        const alpha = Math.PI * slitWidth * Math.sin(theta) / WAVELENGTH;
+        
+        // Avoid division by zero
+        let diffractionPattern;
+        if (Math.abs(alpha) < 0.001) {
+            diffractionPattern = 1;
+        } else {
+            diffractionPattern = (Math.sin(alpha) / alpha) ** 2;
+        }
+        
+        // Apply some contrast enhancement
+        const intensity = Math.pow(diffractionPattern, 0.7);
+        
+        // Draw a pixel of the pattern
+        const r = Math.min(255, 255 * intensity);
+        const g = Math.min(255, 255 * intensity);
+        const b = Math.min(255, 255 * intensity);
+        
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.fillRect(screenX, y, 5, 1);
+    }
+    
+    ctx.restore();
 }
 
 function drawIntensityGraph() {
@@ -356,17 +505,25 @@ function drawIntensityGraph() {
     graphCtx.lineWidth = 1;
     graphCtx.stroke();
     
+    // Smooth the intensity data for better visualization
+    const smoothedData = smoothArray(intensityData, 3);
+    
     // Draw intensity plot
     graphCtx.beginPath();
-    for (let y = 0; y < intensityData.length; y++) {
-        if (y === 0) {
-            graphCtx.moveTo(canvas.width, graphBottom - (intensityData[y] / maxIntensity) * graphHeight);
-        } else {
-            graphCtx.lineTo(canvas.width, graphBottom - (intensityData[y] / maxIntensity) * graphHeight);
-        }
+    
+    // Start at the left edge
+    graphCtx.moveTo(0, canvas.height - (smoothedData[0] / maxIntensity) * graphHeight);
+    
+    // Plot all points
+    for (let y = 1; y < smoothedData.length; y++) {
+        const x = y / smoothedData.length * canvas.width;
+        const intensity = smoothedData[y] / maxIntensity;
+        graphCtx.lineTo(x, canvas.height - intensity * graphHeight);
     }
-    graphCtx.lineTo(canvas.width, graphBottom);
-    graphCtx.lineTo(canvas.width, graphBottom - (intensityData[0] / maxIntensity) * graphHeight);
+    
+    // Complete the shape to fill
+    graphCtx.lineTo(canvas.width, canvas.height);
+    graphCtx.lineTo(0, canvas.height);
     graphCtx.closePath();
     
     const particleType = document.getElementById('particle-type').value;
@@ -382,6 +539,25 @@ function drawIntensityGraph() {
     graphCtx.lineWidth = 2;
     graphCtx.strokeStyle = gradientColor;
     graphCtx.stroke();
+}
+
+// Helper function to smooth an array (used for intensity graph)
+function smoothArray(array, windowSize) {
+    const result = [];
+    
+    for (let i = 0; i < array.length; i++) {
+        let sum = 0;
+        let count = 0;
+        
+        for (let j = Math.max(0, i - windowSize); j <= Math.min(array.length - 1, i + windowSize); j++) {
+            sum += array[j];
+            count++;
+        }
+        
+        result[i] = sum / count;
+    }
+    
+    return result;
 }
 
 function updateEmissionRate() {
@@ -410,6 +586,12 @@ function updateSlits() {
     // Set slit visibility
     slitTop.style.display = slitTopOpen ? 'block' : 'none';
     slitBottom.style.display = slitBottomOpen ? 'block' : 'none';
+    
+    // Reset detections when slits change
+    if (document.getElementById('detection-mode').value === 'accumulation') {
+        detections = [];
+        intensityData = new Array(400).fill(0);
+    }
 }
 
 function getSlitTopY() {
@@ -433,15 +615,13 @@ function updateParticleType() {
         emitter.style.boxShadow = '0 0 10px rgba(0, 191, 255, 0.5)';
         emitter.style.backgroundColor = '#555';
     }
+    
+    // Reset when particle type changes
+    resetSimulation();
 }
 
 function updateDetectionMode() {
     const detectionMode = document.getElementById('detection-mode').value;
-    
-    // In wave mode, we show wave patterns
-    if (detectionMode === 'wave') {
-        // We'll handle this in the visualization
-    }
     
     // In particle detection mode, we clear accumulated detections
     if (detectionMode === 'particle') {
@@ -485,66 +665,6 @@ function toggleOneByOne() {
     }
 }
 
-// Quantum wave functions adapted for visualization
-
-/**
- * Calculates the probability amplitude at a point given the slit configuration
- */
-function calculateProbabilityAmplitude(x, y, slitTopY, slitBottomY, slitTopOpen, slitBottomOpen) {
-    // Skip calculation if no slits are open
-    if (!slitTopOpen && !slitBottomOpen) {
-        return 0;
-    }
-    
-    let amplitude = { real: 0, imag: 0 };
-    
-    // Contribution from top slit
-    if (slitTopOpen) {
-        const distFromTopSlit = Math.sqrt((x - BARRIER_X) ** 2 + (y - slitTopY) ** 2);
-        const phase = (distFromTopSlit / WAVELENGTH) * Math.PI * 2;
-        amplitude.real += Math.cos(phase);
-        amplitude.imag += Math.sin(phase);
-    }
-    
-    // Contribution from bottom slit
-    if (slitBottomOpen) {
-        const distFromBottomSlit = Math.sqrt((x - BARRIER_X) ** 2 + (y - slitBottomY) ** 2);
-        const phase = (distFromBottomSlit / WAVELENGTH) * Math.PI * 2;
-        amplitude.real += Math.cos(phase);
-        amplitude.imag += Math.sin(phase);
-    }
-    
-    // Normalize based on number of open slits
-    const normalizationFactor = (slitTopOpen && slitBottomOpen) ? 2 : 1;
-    amplitude.real /= normalizationFactor;
-    amplitude.imag /= normalizationFactor;
-    
-    return amplitude;
-}
-
-/**
- * Calculates the probability (amplitude squared) from a complex amplitude
- */
-function calculateProbability(amplitude) {
-    return amplitude.real * amplitude.real + amplitude.imag * amplitude.imag;
-}
-
-// Mathematical utility functions
-
-/**
- * Calculates the distance between two points
- */
-function distance(x1, y1, x2, y2) {
-    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-}
-
-/**
- * Maps a value from one range to another
- */
-function map(value, fromLow, fromHigh, toLow, toHigh) {
-    return (value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow) + toLow;
-}
-
 // Handle window resize
 window.addEventListener('resize', function() {
     canvas.width = canvas.clientWidth;
@@ -562,47 +682,3 @@ window.addEventListener('resize', function() {
         }
     }
 });
-
-// Add some extra physics for a more realistic simulation
-function applyQuantumEffects(particle) {
-    // Small random "quantum" fluctuations in movement
-    particle.vx += (Math.random() - 0.5) * 0.05;
-    particle.vy += (Math.random() - 0.5) * 0.05;
-    
-    // Limit velocity to reasonable range
-    const maxVel = 3;
-    const velMag = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
-    if (velMag > maxVel) {
-        particle.vx = (particle.vx / velMag) * maxVel;
-        particle.vy = (particle.vy / velMag) * maxVel;
-    }
-}
-
-// Function to demonstrate the feynman path integral approach
-function visualizeFeynmanPaths(startX, startY, endX, endY) {
-    // This would be a more advanced feature to implement the "sum over all possible paths" approach
-    // Here we just draw a representative sample of possible paths
-    
-    const numPaths = 20;
-    ctx.globalAlpha = 0.2;
-    
-    for (let i = 0; i < numPaths; i++) {
-        // Create a random path with some control points
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        
-        // Random control points for a cubic bezier curve
-        const cp1x = startX + (endX - startX) * 0.3 + (Math.random() - 0.5) * 50;
-        const cp1y = startY + (Math.random() - 0.5) * 100;
-        const cp2x = startX + (endX - startX) * 0.7 + (Math.random() - 0.5) * 50;
-        const cp2y = endY + (Math.random() - 0.5) * 100;
-        
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY);
-        
-        ctx.strokeStyle = '#FFFF0080';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-    }
-    
-    ctx.globalAlpha = 1.0;
-}
